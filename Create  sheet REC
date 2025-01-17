@@ -1,0 +1,74 @@
+Sub CopierAttribVersRec()
+    Dim dossier As String
+    Dim fichier As String
+    Dim wb As Workbook
+    Dim wsATTRIB As Worksheet
+    Dim wsREC As Worksheet
+    Dim nomFichier As String
+    Dim prefix() As Variant
+    Dim i As Integer
+    Dim correspondance As Boolean
+    Dim dossierChoisi As FileDialog
+   
+    ' Initialiser la boîte de dialogue pour le choix du dossier
+    Set dossierChoisi = Application.FileDialog(msoFileDialogFolderPicker)
+    With dossierChoisi
+        .Title = "Sélectionnez le dossier contenant les fichiers Excel"
+        .AllowMultiSelect = False
+        If .Show <> -1 Then Exit Sub ' Si l'utilisateur annule, sortir de la macro
+        dossier = .SelectedItems(1) & "\" ' Récupérer le chemin sélectionné et ajouter le séparateur "\"
+    End With
+   
+    ' Liste des préfixes de nom
+    prefix = Array("SF", "9C", "LD", "HD", "TI", "0A", "REC")
+   
+    ' Boucle pour parcourir chaque fichier Excel dans le dossier
+    fichier = Dir(dossier & "*.xls*")
+    Do While fichier <> ""
+        correspondance = False
+        nomFichier = fichier
+       
+        ' Vérification du préfixe du nom de fichier
+        For i = LBound(prefix) To UBound(prefix)
+            If Left(nomFichier, Len(prefix(i))) = prefix(i) Then
+                correspondance = True
+                Exit For
+            End If
+        Next i
+       
+        ' Si le préfixe correspond, on ouvre le fichier
+        If correspondance Then
+            Set wb = Workbooks.Open(dossier & fichier)
+           
+            ' Vérifier si la feuille "ATTRIB" existe
+            On Error Resume Next
+            Set wsATTRIB = wb.Worksheets("ATTRIB")
+            On Error GoTo 0
+           
+            If Not wsATTRIB Is Nothing Then
+                ' Créer la feuille "REC" si elle n'existe pas déjà
+                On Error Resume Next
+                Set wsREC = wb.Worksheets("REC")
+                On Error GoTo 0
+               
+                If wsREC Is Nothing Then
+                    Set wsREC = wb.Worksheets.Add
+                    wsREC.Name = "REC"
+                End If
+               
+                ' Copier le contenu de la feuille ATTRIB vers la feuille REC
+                wsATTRIB.Cells.Copy
+                wsREC.Cells.PasteSpecial Paste:=xlPasteAll
+                Application.CutCopyMode = False
+            End If
+           
+            ' Fermer et enregistrer le fichier
+            wb.Close SaveChanges:=True
+        End If
+       
+        ' Passer au fichier suivant
+        fichier = Dir
+    Loop
+   
+    MsgBox "Opération terminée !"
+End Sub
