@@ -1,0 +1,94 @@
+Sub TraitementDossiers()
+    Dim FSO As Object
+    Dim dossier As Object
+    Dim fichier As Object
+    Dim cheminRep As String
+    Dim wsRetourInterco As Workbook
+    Dim wsRec As Worksheet
+    Dim cheminFichier As String
+    Dim fichierRetourInterco As String
+    Dim fichierRec As String
+    Dim fichierNom As String
+    
+    ' Demander à l'utilisateur de sélectionner un répertoire
+    cheminRep = InputBox("Entrez le chemin du répertoire contenant les dossiers:", "Chemin du répertoire")
+    If cheminRep = "" Then Exit Sub ' Si l'utilisateur annule, on quitte le script
+    
+    ' Créer l'objet FileSystemObject
+    Set FSO = CreateObject("Scripting.FileSystemObject")
+    
+    ' Vérifier si le répertoire existe
+    If Not FSO.FolderExists(cheminRep) Then
+        MsgBox "Le répertoire spécifié n'existe pas.", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Boucle pour parcourir tous les sous-dossiers du répertoire
+    For Each dossier In FSO.GetFolder(cheminRep).Subfolders
+        ' Chercher le fichier "Retour_interco"
+        fichierRetourInterco = ""
+        For Each fichier In dossier.Files
+            fichierNom = UCase(fichier.Name) ' Convertir le nom de fichier en majuscules pour ignorer la casse
+            If InStr(fichierNom, "RETOUR_INTERCO") > 0 And (Right(fichierNom, 5) = ".XLSX" Or Right(fichierNom, 4) = ".XLS") Then
+                fichierRetourInterco = fichier.Path
+                Exit For
+            End If
+        Next fichier
+        
+        If fichierRetourInterco <> "" Then
+            ' Ouvrir le fichier Retour_interco
+            Set wsRetourInterco = Workbooks.Open(fichierRetourInterco)
+            
+            ' Chercher le fichier "REC"
+            fichierRec = ""
+            For Each fichier In dossier.Files
+                fichierNom = UCase(fichier.Name) ' Convertir le nom de fichier en majuscules pour ignorer la casse
+                If InStr(fichierNom, "REC") > 0 And (Right(fichierNom, 5) = ".XLSX" Or Right(fichierNom, 4) = ".XLS") Then
+                    fichierRec = fichier.Path
+                    Exit For
+                End If
+            Next fichier
+            
+            If fichierRec <> "" Then
+                ' Ouvrir le fichier REC
+                Workbooks.Open fichierRec
+                Set wsRec = ActiveWorkbook.Sheets("REC")
+                
+                ' Copier les valeurs de "Retour_interco" vers "REC" sauf pour les cellules F13:F18
+                wsRec.Range("F9").Value = wsRetourInterco.Sheets(1).Range("C5").Value
+                wsRec.Range("F22").Value = wsRetourInterco.Sheets(1).Range("C6").Value
+                wsRec.Range("F10:F11").Value = "OK"
+                wsRec.Range("F20:F21").Value = "OK"
+                wsRec.Range("F12:F19").Value = "CONNECTE"
+                
+                ' Appliquer la couleur rouge aux modifications sauf pour les cellules F13:F18
+                wsRec.Range("F9").Font.Color = RGB(255, 0, 0)
+                wsRec.Range("F22").Font.Color = RGB(255, 0, 0)
+                wsRec.Range("F10:F11").Font.Color = RGB(255, 0, 0)
+                wsRec.Range("F20:F21").Font.Color = RGB(255, 0, 0)
+                wsRec.Range("F12:F19").Font.Color = RGB(255, 0, 0)
+                
+                ' Assurez-vous de ne pas modifier les cellules F13:F18
+                wsRec.Range("F13:F18").ClearContents
+                
+                ' Enregistrer et fermer le fichier REC
+                ActiveWorkbook.Save
+                ActiveWorkbook.Close
+                
+                ' Afficher un message pour chaque fichier traité
+                MsgBox "Traitement effectué pour: " & fichierRec, vbInformation
+            Else
+                MsgBox "Fichier REC non trouvé dans le dossier: " & dossier.Name, vbExclamation
+            End If
+            
+            ' Fermer le fichier Retour_interco
+            wsRetourInterco.Close False
+        Else
+            MsgBox "Fichier Retour_interco non trouvé dans le dossier: " & dossier.Name, vbExclamation
+        End If
+    Next dossier
+    
+    ' Libérer la mémoire
+    Set FSO = Nothing
+    Set wsRetourInterco = Nothing
+End Sub
