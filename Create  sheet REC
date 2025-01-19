@@ -1,74 +1,92 @@
 Sub CopierAttribVersRec()
-    Dim dossier As String
-    Dim fichier As String
+    Dim fso As Object
+    Dim dossierPrincipal As String
+    Dim dossier As Object
+    Dim sousDossier As Object
+    Dim fichier As Object
     Dim wb As Workbook
     Dim wsATTRIB As Worksheet
-    Dim wsREC As Worksheet
+    Dim wsRec As Worksheet
     Dim nomFichier As String
     Dim prefix() As Variant
     Dim i As Integer
     Dim correspondance As Boolean
     Dim dossierChoisi As FileDialog
-   
-    ' Initialiser la boîte de dialogue pour le choix du dossier
+
+    ' Initialiser la boîte de dialogue pour le choix du dossier principal
     Set dossierChoisi = Application.FileDialog(msoFileDialogFolderPicker)
     With dossierChoisi
-        .Title = "Sélectionnez le dossier contenant les fichiers Excel"
+        .Title = "Sélectionnez le dossier principal contenant les sous-dossiers"
         .AllowMultiSelect = False
         If .Show <> -1 Then Exit Sub ' Si l'utilisateur annule, sortir de la macro
-        dossier = .SelectedItems(1) & "\" ' Récupérer le chemin sélectionné et ajouter le séparateur "\"
+        dossierPrincipal = .SelectedItems(1) & "\"
     End With
-   
+
+    ' Créer une instance de FileSystemObject
+    Set fso = CreateObject("Scripting.FileSystemObject")
+
     ' Liste des préfixes de nom
     prefix = Array("SF", "9C", "LD", "HD", "TI", "0A", "REC")
-   
-    ' Boucle pour parcourir chaque fichier Excel dans le dossier
-    fichier = Dir(dossier & "*.xls*")
-    Do While fichier <> ""
-        correspondance = False
-        nomFichier = fichier
-       
-        ' Vérification du préfixe du nom de fichier
-        For i = LBound(prefix) To UBound(prefix)
-            If Left(nomFichier, Len(prefix(i))) = prefix(i) Then
-                correspondance = True
-                Exit For
-            End If
-        Next i
-       
-        ' Si le préfixe correspond, on ouvre le fichier
-        If correspondance Then
-            Set wb = Workbooks.Open(dossier & fichier)
-           
-            ' Vérifier si la feuille "ATTRIB" existe
-            On Error Resume Next
-            Set wsATTRIB = wb.Worksheets("ATTRIB")
-            On Error GoTo 0
-           
-            If Not wsATTRIB Is Nothing Then
-                ' Créer la feuille "REC" si elle n'existe pas déjà
+
+    ' Parcourir tous les sous-dossiers du dossier principal
+    For Each sousDossier In fso.GetFolder(dossierPrincipal).Subfolders
+        ' Parcourir tous les fichiers Excel dans le sous-dossier
+        For Each fichier In sousDossier.Files
+            If Right(fso.GetFileName(fichier), 4) = "xlsx" Or Right(fso.GetFileName(fichier), 3) = "xls" Then
                 On Error Resume Next
-                Set wsREC = wb.Worksheets("REC")
-                On Error GoTo 0
-               
-                If wsREC Is Nothing Then
-                    Set wsREC = wb.Worksheets.Add
-                    wsREC.Name = "REC"
+                correspondance = False
+                nomFichier = fso.GetFileName(fichier)
+
+                ' Vérification du préfixe du nom de fichier
+                For i = LBound(prefix) To UBound(prefix)
+                    If Left(nomFichier, Len(prefix(i))) = prefix(i) Then
+                        correspondance = True
+                        Exit For
+                    End If
+                Next i
+
+                ' Si le préfixe correspond, on ouvre le fichier
+                If correspondance Then
+                    Set wb = Workbooks.Open(fichier.Path)
+                    If wb Is Nothing Then
+                        MsgBox "Impossible d'ouvrir le fichier : " & fichier.Path
+                        GoTo NextFile
+                    End If
+
+                    ' Vérifier si la feuille "ATTRIB" existe
+                    Set wsATTRIB = Nothing
+                    On Error Resume Next
+                    Set wsATTRIB = wb.Worksheets("ATTRIB")
+                    On Error GoTo 0
+
+                    If Not wsATTRIB Is Nothing Then
+                        ' Créer la feuille "REC" si elle n'existe pas déjà
+                        Set wsRec = Nothing
+                        On Error Resume Next
+                        Set wsRec = wb.Worksheets("REC")
+                        On Error GoTo 0
+
+                        If wsRec Is Nothing Then
+                            Set wsRec = wb.Worksheets.Add
+                            wsRec.Name = "REC"
+                        End If
+
+                        ' Copier le contenu de la feuille ATTRIB vers la feuille REC
+                        wsATTRIB.Cells.Copy
+                        wsRec.Cells(1, 1).PasteSpecial Paste:=xlPasteAll
+                        Application.CutCopyMode = False
+                    Else
+                        MsgBox "La feuille ATTRIB est introuvable dans le fichier : " & fichier.Name
+                    End If
+
+                    ' Fermer et enregistrer le fichier
+                    wb.Close SaveChanges:=True
                 End If
-               
-                ' Copier le contenu de la feuille ATTRIB vers la feuille REC
-                wsATTRIB.Cells.Copy
-                wsREC.Cells.PasteSpecial Paste:=xlPasteAll
-                Application.CutCopyMode = False
+NextFile:
             End If
-           
-            ' Fermer et enregistrer le fichier
-            wb.Close SaveChanges:=True
-        End If
-       
-        ' Passer au fichier suivant
-        fichier = Dir
-    Loop
-   
-    MsgBox "Opération terminée !"
+        Next fichier
+    Next sousDossier
+
+    MsgBox "Opération terminée pour tous les dossiers et fichiers !"
 End Sub
+
